@@ -2,6 +2,8 @@
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
+header('Content-Type: application/json');
+
 
 require "dbh.php"; // Connect to the database
 
@@ -9,68 +11,56 @@ require "dbh.php"; // Connect to the database
 $json_data = file_get_contents("php://input");
 
 // Decode the JSON data into an associative array
-$request_data = json_decode($json_data, true);
+$request_data = json_decode($json_data, true); 
 
-// Check if required fields are present
+// Check if 'username' and 'password' keys exist in $request_data
 if (isset($request_data['username']) && isset($request_data['password'])) {
-    // Extract data from request
+    // Get the username and password from the decoded JSON data
     $username = $request_data['username'];
     $password = $request_data['password'];
 
-    // Handle registration
-    if (isset($request_data['register'])) {
-        // Check if confirm_password field is present
-        if (isset($request_data['confirm_password'])) {
-            $confirm_password = $request_data['confirm_password'];
-
-            // Check if passwords match
-            if ($password !== $confirm_password) {
-                $response['status'] = "error";
-                $response['message'] = "Passwords do not match";
-            } else {
-                // Perform registration
-                $sql = "INSERT INTO users (username, password) VALUES (:username, :password)";
-                $stmt = $conn->prepare($sql);
-                $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-                $stmt->bindParam(':password', $hashed_password, PDO::PARAM_STR);
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT); // Hash the password
-                $stmt->execute();
-
-                // Execute the statement
-                if ($stmt->rowCount() > 0) {
-                    $response['status'] = "success";
-                    $response['message'] = "Registration successful!";
-                } else {
-                    $response['status'] = "error";
-                    $response['message'] = "Failed to register user";
-                }
-                $stmt->closeCursor();
-            }
-        } else {
-            $response['status'] = "error";
-            $response['message'] = "Confirm password field missing";
-        }
-    } else {
-        // Handle login
-        $sql = "SELECT * FROM users WHERE username = :username AND password = :password";
+    if (isset($request_data['register']) && $request_data['register'] === true) {
+        // Registration
+        $sql = "INSERT INTO users (username, password) VALUES (:username, :password)";
         $stmt = $conn->prepare($sql);
         $stmt->bindParam(':username', $username, PDO::PARAM_STR);
-        $stmt->bindParam(':password', $hashed_password, PDO::PARAM_STR);
-        $hashed_password = $request_data['password'];
+        $stmt->bindParam(':password', $password, PDO::PARAM_STR);
         $stmt->execute();
 
-        // Execute the statement
+        // Check if the insertion was successful
         if ($stmt->rowCount() > 0) {
             $response['status'] = "success";
-            $response['message'] = "Login successful!";
+            $response['message'] = "Registration successful!";
         } else {
             $response['status'] = "error";
-            $response['message'] = "Invalid username or password";
+            $response['message'] = "Failed to register user";
         }
+
+        // Close the prepared statement
         $stmt->closeCursor();
-    }
+
+    // Query to check login credentials using prepared statements
+    } else{
+            $sql = "SELECT * FROM users WHERE username = :username AND password = :password";
+            $stmt = $conn->prepare($sql);
+            $stmt->bindParam(':username', $username, PDO::PARAM_STR);
+            $stmt->bindParam(':password', $password, PDO::PARAM_STR);
+            $stmt->execute();
+
+                // Check if login credentials are valid
+            if ($stmt->rowCount() > 0) {
+                    $response['status'] = "success";
+                    $response['message'] = "Login successful!";
+            } else {
+                    $response['status'] = "error";
+                    $response['message'] = "Invalid username or password";
+            }
+
+                // Close the prepared statement
+            $stmt->closeCursor();
+        }
 } else {
-    // Handle case where required fields are missing
+    // Handle the case where 'username' or 'password' is missing
     $response['status'] = "error";
     $response['message'] = "Invalid request data";
 }
